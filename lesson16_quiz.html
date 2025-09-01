@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Lesson 16 — Prefixed Length Strings (PLS) Quiz</title>
+<link rel="stylesheet" href="css/style.css" />
+<style>
+  .muted { color: var(--muted); }
+  button { cursor: pointer; background: #0f1318; color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+  button:hover { border-color: var(--accent); }
+  .btn-primary { background: linear-gradient(180deg, #152032, #0f1723); }
+  .footer { text-align: center; padding: 28px 12px 36px; color: var(--muted); font-size: .9rem; }
+  .kbd { border: 1px solid var(--border); background: #0d1218; border-bottom: 3px solid #192433; padding: 1px 6px; border-radius: 6px; }
+  .question { padding: 14px; border-radius: 12px; background: #0e1217; border: 1px dashed #223145; }
+  .answers { margin-top: 10px; display: grid; gap: 8px; }
+  .answer { padding: 10px 12px; border-radius: 10px; background: #0d1218; border: 1px solid var(--border); }
+  .answer.correct { border-color: rgba(46, 204, 113, .6); background: rgba(46, 204, 113, .1); }
+  .answer.wrong { border-color: rgba(255, 107, 107, .6); background: rgba(255, 107, 107, .08); }
+  .explain { margin-top: 8px; color: var(--muted); font-size: .92rem; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Lesson 16 — Prefixed Length Strings (PLS)</h1>
+  <div class="subtitle">Self-check quiz to test your understanding of structs, reference counting, and PLS.</div>
+</header>
+
+<main>
+  <!-- QUIZ -->
+  <section class="card" aria-labelledby="quizTitle">
+    <h2 id="quizTitle">Interactive Quiz</h2>
+    <div id="quiz"></div>
+    <div style="margin-top:12px; display:flex; gap:10px;">
+      <button id="check" class="btn-primary">Check answers (<span id="count">0</span> selected)</button>
+      <button id="retry">New random set</button>
+    </div>
+    <div id="result" style="margin-top:12px;"></div>
+  </section>
+</main>
+
+<div class="footer"><a href="index.html" style="color:var(--accent);">← Back to index</a> · Keyboard: <span class="kbd">C</span> check · <span class="kbd">R</span> retry</div>
+
+<script>
+const BANK = [
+  {
+    id: 'struct-layout', type: 'mc',
+    q: 'What fields are included in the struct `pls` header?',
+    choices: [
+      'len, refcount, magic, str[]',
+      'len, capacity, str[]',
+      'refcount, str[] only',
+      'len, magic only'
+    ],
+    correct: [0],
+    explain: 'The header stores len, refcount, magic, and a flexible array member str[].'
+  },
+  {
+    id: 'flexible-array', type: 'mc',
+    q: 'The declaration `char str[];` inside the struct is an example of what C feature?',
+    choices: [
+      'Pointer arithmetic',
+      'Flexible array member (C99)',
+      'Static array of chars',
+      'Union field'
+    ],
+    correct: [1],
+    explain: 'It is a flexible array member introduced in C99, size defined at allocation.'
+  },
+  {
+    id: 'ps-create', type: 'mc',
+    q: 'What does `ps_create` return?',
+    choices: [
+      'A pointer to struct pls',
+      'A pointer to the allocated string (`p->str`)',
+      'The total size of allocated memory',
+      'The reference count'
+    ],
+    correct: [1],
+    explain: 'ps_create returns p->str, a pointer to the start of the string data.'
+  },
+  {
+    id: 'refcount-init', type: 'mc',
+    q: 'What is the initial value of refcount when a string is created?',
+    choices: ['0', '1', '2', 'Undefined'],
+    correct: [1],
+    explain: 'Newly created objects start with refcount = 1, since the caller holds one reference.'
+  },
+  {
+    id: 'retain-release', type: 'ms',
+    q: 'Which functions modify the reference count of a PLS string?',
+    choices: ['ps_retain', 'ps_release', 'ps_print', 'ps_validate'],
+    correct: [0,1],
+    explain: 'ps_retain increments, ps_release decrements. ps_print/ps_validate don’t change refcount.'
+  },
+  {
+    id: 'magic', type: 'mc',
+    q: 'What is the role of the `magic` field set to 0xDEADBEEF?',
+    choices: [
+      'To store the string length',
+      'To act as a unique identifier for debugging/validation',
+      'To count references safely',
+      'To terminate the string'
+    ],
+    correct: [1],
+    explain: 'Magic acts as a validator to detect invalid or freed strings.'
+  },
+  {
+    id: 'ps-free', type: 'mc',
+    q: 'Why does ps_free subtract sizeof(struct pls) from the string pointer?',
+    choices: [
+      'Because malloc requires alignment',
+      'To recover the original pointer returned by malloc',
+      'To skip the null terminator',
+      'To access refcount directly'
+    ],
+    correct: [1],
+    explain: 'The malloc was for the whole struct+string. The string pointer points after the header.'
+  },
+  {
+    id: 'ps-len', type: 'mc',
+    q: 'What is the time complexity of ps_len?',
+    choices: ['O(1)', 'O(n)', 'O(n log n)', 'Depends on refcount'],
+    correct: [0],
+    explain: 'ps_len simply returns the stored len field, so it is O(1).'
+  },
+  {
+    id: 'safety', type: 'ms',
+    q: 'What safety issues does reference counting + magic help mitigate?',
+    choices: [
+      'Use-after-free',
+      'Buffer overflows',
+      'Dangling pointers',
+      'Data races'
+    ],
+    correct: [0,2],
+    explain: 'They help against use-after-free and dangling pointers, not buffer overflows or concurrency issues.'
+  }
+];
+
+const QUIZ_SIZE = 6;
+
+const el = {
+  quiz: document.getElementById('quiz'),
+  check: document.getElementById('check'),
+  retry: document.getElementById('retry'),
+  result: document.getElementById('result'),
+  count: document.getElementById('count')
+};
+
+let currentQuestions = [];
+let checked = false;
+
+function sample(arr, k){
+  const a = [...arr];
+  for (let i=a.length-1;i>0;i--){
+    const j = (Math.random()*(i+1))|0; [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a.slice(0,k);
+}
+function esc(s){ return s.replace(/[&<>"]/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[m])); }
+
+function renderQuiz(){
+  checked = false;
+  currentQuestions = sample(BANK, QUIZ_SIZE);
+  el.quiz.innerHTML = '';
+  el.result.textContent = '';
+  el.count.textContent = '0';
+
+  currentQuestions.forEach((q, idx)=>{
+    const qEl = document.createElement('div');
+    qEl.className = 'question';
+    qEl.dataset.qid = q.id;
+
+    let body = `<div><strong>Q${idx+1}.</strong> ${esc(q.q)}</div>`;
+    if (q.type === 'mc' || q.type === 'ms') {
+      const multi = q.type === 'ms';
+      body += `<div class="answers">`;
+      q.choices.forEach((c, i)=>{
+        body += `<label class="answer"><input ${multi ? 'type="checkbox"' : 'type="radio"'} name="q_${idx}" value="${i}" /> <span>${esc(c)}</span></label>`;
+      });
+      body += `</div>`;
+    } else {
+      body += `<div class="answers"><input type="text" aria-label="Answer" placeholder="Answer" /></div>`;
+    }
+    qEl.innerHTML = body;
+    el.quiz.appendChild(qEl);
+  });
+
+  el.quiz.querySelectorAll('input').forEach(inp=>{
+    inp.addEventListener('input', updateCount);
+  });
+}
+
+function updateCount(){
+  let count = 0;
+  currentQuestions.forEach((q, idx)=>{
+    const node = el.quiz.children[idx];
+    if (!node) return;
+    if (q.type === 'mc') {
+      if (node.querySelector('input[type="radio"]:checked')) count++;
+    } else if (q.type === 'ms') {
+      if (node.querySelectorAll('input[type="checkbox"]:checked').length) count++;
+    } else {
+      if (node.querySelector('input[type="text"]').value.trim()) count++;
+    }
+  });
+  el.count.textContent = String(count);
+}
+
+function arraysEqual(a, b){
+  if (a.length !== b.length) return false;
+  const s1 = [...a].sort((x,y)=>x-y);
+  const s2 = [...b].sort((x,y)=>x-y);
+  return s1.every((v,i)=>v===s2[i]);
+}
+
+function checkAnswers(){
+  if (checked) return;
+  checked = true;
+  let correct = 0;
+
+  currentQuestions.forEach((q, idx)=>{
+    const node = el.quiz.children[idx];
+    const ansWraps = node.querySelectorAll('.answer');
+    if (q.type === 'mc') {
+      const sel = node.querySelector('input[type="radio"]:checked');
+      const picked = sel ? [Number(sel.value)] : [];
+      if (arraysEqual(picked, q.correct)) correct++;
+      ansWraps.forEach((w,i)=>{ if (q.correct.includes(i)) w.classList.add('correct'); else if (sel && Number(sel.value)===i) w.classList.add('wrong'); });
+    } else if (q.type === 'ms') {
+      const picks = [...node.querySelectorAll('input[type="checkbox"]:checked')].map(x=>Number(x.value));
+      if (arraysEqual(picks, q.correct)) correct++;
+      ansWraps.forEach((w,i)=>{ if (q.correct.includes(i)) w.classList.add('correct'); else if (picks.includes(i)) w.classList.add('wrong'); });
+    }
+  });
+
+  const pct = Math.round((correct/currentQuestions.length)*100);
+  el.result.innerHTML = `<strong>${correct}/${currentQuestions.length}</strong> correct — ${pct}%`;
+}
+
+renderQuiz();
+el.check.addEventListener('click', checkAnswers);
+el.retry.addEventListener('click', renderQuiz);
+document.addEventListener('keydown', e=>{
+  if (e.key.toLowerCase()==='r') { e.preventDefault(); renderQuiz(); }
+  if (e.key.toLowerCase()==='c') { e.preventDefault(); checkAnswers(); }
+});
+</script>
+</body>
+</html>
+

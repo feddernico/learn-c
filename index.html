@@ -1,85 +1,113 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>C Course — Interactive Quizzes</title>
-<style>
-  :root {
-    --bg: #0b0d10;
-    --panel: #11151a;
-    --text: #e6edf3;
-    --muted: #9fb0c3;
-    --accent: #64b5f6;
-    --border: #1b2530;
-    --chip: #1b2430;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, "Helvetica Neue", Arial;
-    color: var(--text);
-    background: radial-gradient(1200px 700px at 10% 0%, #0e141c 0%, var(--bg) 60%);
-  }
-  header {
-    padding: 28px 20px 12px;
-    text-align: center;
-  }
-  h1 { margin: 0; font-size: 1.6rem; letter-spacing: .2px; }
-  .subtitle { color: var(--muted); margin-top: 6px; font-size: .95rem; }
-  main {
-    max-width: 880px; margin: 28px auto 60px; padding: 0 16px;
-    display: grid; gap: 18px;
-  }
-  .card {
-    background: linear-gradient(180deg, var(--panel), #0f1318);
-    border: 1px solid var(--border);
-    border-radius: 14px; padding: 20px;
-    box-shadow: 0 10px 30px rgba(0,0,0,.25);
-  }
-  h2 { font-size: 1.2rem; margin: 0 0 12px; }
-  .lesson-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
-  .lesson-item {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 14px 16px; border-radius: 12px; background: #0e1217;
-    border: 1px solid var(--border);
-    transition: border-color .15s ease, background .15s ease;
-  }
-  .lesson-item:hover {
-    border-color: var(--accent);
-    background: #111720;
-  }
-  .lesson-item a {
-    color: var(--accent);
-    text-decoration: none;
-    font-weight: 600;
-  }
-  .footer {
-    text-align: center; padding: 28px 12px 36px;
-    color: var(--muted); font-size: .9rem;
-  }
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>C Course — Interactive Quizzes</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    /* Modal overlay */
+    .video-modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0,0,0,0.7);
+      justify-content: center;
+      align-items: center;
+    }
+
+    .video-modal-content {
+      position: relative;
+      width: 80%;
+      max-width: 800px;
+    }
+
+    .video-modal iframe {
+      width: 100%;
+      height: 450px;
+    }
+
+    .close-video {
+      position: absolute;
+      top: -20px;
+      right: -20px;
+      background: #ff5555;
+      color: white;
+      border: none;
+      border-radius: 50%;
+      font-size: 20px;
+      width: 35px;
+      height: 35px;
+      cursor: pointer;
+    }
+
+    .lesson-item span {
+      cursor: pointer;
+      color: #1e90ff;
+      text-decoration: underline;
+    }
+  </style>
 </head>
 <body>
-<header>
-  <h1>C Course — Interactive Lessons & Quizzes</h1>
-  <div class="subtitle">Choose a lesson below to practice with interactive quizzes.</div>
-</header>
+  <header>
+    <h1>C Course — Interactive Lessons & Quizzes</h1>
+    <div class="subtitle">Choose a video lesson below by clicking on the name and practice with interactive quizzes.</div>
+  </header>
 
-<main>
-  <section class="card">
-    <h2>Available Lessons</h2>
-    <ul class="lesson-list">
-      <li class="lesson-item">
-        <span>Lesson 15 — Files, argc/argv, Linked Lists</span>
-        <a href="lesson15_quiz.html">Start Quiz →</a>
-      </li>
-      <!-- Add more lessons here following the same pattern -->
-    </ul>
-  </section>
-</main>
+  <main>
+    <section class="card">
+      <h2>Available Lessons</h2>
+      <ul class="lesson-list">
+        <li class="lesson-item">
+          <span data-video="https://www.youtube.com/embed/aTT2W5NACEY?si=TZhu8FbdolN0nOMa">Lesson 15 — Files, argc/argv, Linked Lists</span>
+          <a href="lesson15_quiz.html">Start Quiz →</a>
+        </li>
+        <li class="lesson-item">
+          <span data-video="https://www.youtube.com/embed/VPs_QtlLNcs?si=XHL0KQTCS7biKynX">Lesson 16 — Prefixed Length Strings (PLS)</span>
+          <a href="lesson16_quiz.html">Start Quiz →</a>
+        </li>
+      </ul>
+    </section>
+  </main>
 
-<div class="footer">Made with ❤️ for C learners</div>
+  <!-- Video Modal -->
+  <div class="video-modal" id="videoModal">
+    <div class="video-modal-content">
+      <button class="close-video" id="closeVideo">&times;</button>
+      <iframe id="lessonVideo" src="" frameborder="0" allowfullscreen></iframe>
+    </div>
+  </div>
+
+  <div class="footer">Made with ❤️ for C learners</div>
+
+  <script>
+    const modal = document.getElementById('videoModal');
+    const iframe = document.getElementById('lessonVideo');
+    const closeBtn = document.getElementById('closeVideo');
+
+    document.querySelectorAll('.lesson-item span').forEach(item => {
+      item.addEventListener('click', () => {
+        iframe.src = item.dataset.video + "?autoplay=1";
+        modal.style.display = 'flex';
+      });
+    });
+
+    closeBtn.addEventListener('click', () => {
+      iframe.src = "";
+      modal.style.display = 'none';
+    });
+
+    // Close modal when clicking outside the video
+    window.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        iframe.src = "";
+        modal.style.display = 'none';
+      }
+    });
+  </script>
 </body>
 </html>
-
