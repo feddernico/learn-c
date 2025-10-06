@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Lesson 17 — C Structs and Memory Deep Dive Quiz</title>
+<style>
+  :root {
+    --bg: #0a0c10; --text: #e0e0e0; --muted: #888; --border: #2a2f38;
+    --accent: #3498db; --correct: #2ecc71; --wrong: #e74c3c;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--bg); color: var(--text); line-height: 1.6;
+    margin: 0; padding: 20px;
+  }
+  main { max-width: 700px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 2rem; }
+  h1 { color: var(--accent); }
+  .subtitle { color: var(--muted); }
+  .card { background: #0f1318; border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
+  .footer { text-align: center; padding: 28px 12px 36px; color: var(--muted); font-size: .9rem; }
+  .kbd { border: 1px solid var(--border); background: #0d1218; border-bottom: 3px solid #192433; padding: 1px 6px; border-radius: 6px; }
+  button {
+    cursor: pointer; background: #1a2028; color: var(--text); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 16px; font-size: 1rem; transition: all .2s ease;
+  }
+  button:hover { border-color: var(--accent); }
+  button:disabled { cursor: not-allowed; opacity: 0.5; }
+  .btn-primary { background: linear-gradient(180deg, #152032, #0f1723); }
+  
+  /* Quiz specific styles */
+  #quiz-container { min-height: 250px; }
+  .question-header { margin-bottom: 1rem; display: flex; justify-content: space-between; color: var(--muted); }
+  .question-body { margin-bottom: 1.5rem; font-size: 1.1rem; }
+  .answers { display: grid; gap: 10px; }
+  .answer {
+    padding: 12px 14px; border-radius: 10px; background: #0d1218;
+    border: 1px solid var(--border); cursor: pointer; transition: all .2s ease;
+  }
+  .answer input { margin-right: 10px; }
+  .answer.correct { border-color: rgba(46, 204, 113, .6); background: rgba(46, 204, 113, .1); }
+  .answer.wrong { border-color: rgba(255, 107, 107, .6); background: rgba(255, 107, 107, .08); }
+  .answer.selected { border-color: var(--accent); }
+  .explanation { margin-top: 12px; color: var(--muted); font-size: .92rem; border-left: 3px solid var(--border); padding-left: 12px; }
+  #quiz-controls { margin-top: 20px; display: flex; gap: 12px; }
+  #result-container { text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Lesson 17 — C Structs and Memory Deep Dive</h1>
+  <div class="subtitle">Self-check quiz to test your understanding of pointers, structs, and library design.</div>
+</header>
+
+<main>
+  <section class="card" aria-labelledby="quizTitle">
+    <h2 id="quizTitle" style="display:none;">Interactive Quiz</h2>
+    <div id="quiz-container"></div>
+    <div id="quiz-controls">
+      <button id="submit-btn" class="btn-primary">Submit Answer</button>
+      <button id="retry-btn" style="display:none;">Try Again</button>
+    </div>
+  </section>
+</main>
+
+<div class="footer">
+  <a href="#" id="back-link" style="color:var(--accent); display:none;">← Back to index</a>
+  Keyboard: <span class="kbd">N</span> Next/Submit · <span class="kbd">R</span> Retry
+</div>
+
+<script>
+const QUESTION_BANK = [
+  {
+    id: 'struct-pointer-vs-fam',
+    q: 'In a C struct, what is the key difference between defining a member as `char *str;` versus `char str[];` (a flexible array member)?',
+    choices: [
+      'They are identical and interchangeable.',
+      '`char *str` stores an 8-byte pointer to data elsewhere, while `char str[]` embeds the string data directly after the struct\'s other fields in a single memory block.',
+      '`char str[]` must have a fixed size known at compile time.',
+      '`char *str` is an older, deprecated syntax for declaring strings.'
+    ],
+    correct: 1,
+    explain: 'The transcript emphasizes this difference. `char *str` is a member that holds an address, requiring a separate memory allocation for the string data. The flexible array member `char str[]` does not store a pointer; it acts as a placeholder for data allocated contiguously with the struct itself.'
+  },
+  {
+    id: 'memory-allocation-fam',
+    q: 'When using a struct with a flexible array member like `struct pls { long len; char str[]; };`, how is memory typically allocated to hold a 10-byte string?',
+    choices: [
+      '`malloc(sizeof(struct pls))` and then a separate `malloc(10+1)`.',
+      '`malloc(sizeof(struct pls) + 10 + 1)`.',
+      'The compiler automatically allocates the needed memory.',
+      'Only `malloc(10+1)` is needed since the header is virtual.'
+    ],
+    correct: 1,
+    explain: 'This technique, called "hyper-allocation" in the video, allocates a single contiguous block of memory for both the struct header and the flexible string data that follows. The `+1` is for the null terminator.'
+  },
+  {
+    id: 'endianness',
+    q: 'The speaker\'s hexdump shows the `long` value `10` stored as `0A 00 00 00 00 00 00 00`. What does this memory layout indicate about the system\'s architecture?',
+    choices: [
+      'It is a big-endian system.',
+      'It is a little-endian system.',
+      'The system uses EBCDIC encoding.',
+      'The compiler has optimized the integer storage.'
+    ],
+    correct: 1,
+    explain: 'In a little-endian system, the least significant byte (`0A`) is stored at the lowest memory address. A big-endian system would have stored it as `00 00 00 00 00 00 00 0A`.'
+  },
+  {
+    id: 'refcount-overflow',
+    q: 'What strategy does the speaker suggest for handling a reference count that is about to overflow its maximum value (e.g., `UINT32_MAX`)?',
+    choices: [
+      'The program should crash with an error to prevent data corruption.',
+      'Reset the counter to zero and log a warning.',
+      'Stop incrementing or decrementing the count, effectively making the object "sticky" and preventing it from ever being freed.',
+      'Automatically switch to a 64-bit counter at runtime.'
+    ],
+    correct: 2,
+    explain: 'This technique is used for "internalized" or very high-traffic objects. By making the object permanent, you avoid the risk of freeing it while references still exist, at the cost of a small, controlled memory leak.'
+  },
+  {
+    id: 'ternary-operator',
+    q: 'The `hexdump` function uses the C expression: `isprint(byte[i]) ? byte[i] : \'.\'`. What is this construct an example of?',
+    choices: [
+      'A switch statement.',
+      'A bitwise operation.',
+      'A short-circuited logical evaluation.',
+      'The ternary conditional operator.'
+    ],
+    correct: 3,
+    explain: 'The `condition ? value_if_true : value_if_false` syntax is the ternary operator. It is a compact way to write a simple if-else expression.'
+  },
+  {
+    id: 'library-design',
+    q: 'According to the speaker\'s design philosophy, where is reference counting often more appropriately implemented?',
+    choices: [
+      'In a low-level, high-performance string library like Redis SDS.',
+      'In a higher-level object structure that "wraps" various data types (like Redis\'s `redisObject`).',
+      'It should be avoided entirely in C in favor of manual memory management.',
+      'Directly within the C standard library\'s `string.h`.'
+    ],
+    correct: 1,
+    explain: 'The speaker argues that reference counting is a higher-level concept. In systems like Redis, the low-level string (SDS) doesn\'t have a refcount, but the `redisObject` that contains the string (or list, hash, etc.) does.'
+  }
+];
+
+const QUIZ_SIZE = 6;
+const el = {
+  container: document.getElementById('quiz-container'),
+  submitBtn: document.getElementById('submit-btn'),
+  retryBtn: document.getElementById('retry-btn')
+};
+
+let currentQuestions = [];
+let currentIndex = 0;
+let score = 0;
+let answerChecked = false;
+
+function sample(arr, k) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a.slice(0, k);
+}
+
+function esc(s) {
+    return s.replace(/[&<>"]/g, m => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[m]));
+}
+
+function startQuiz() {
+  currentQuestions = sample(QUESTION_BANK, QUIZ_SIZE);
+  currentIndex = 0;
+  score = 0;
+  answerChecked = false;
+  el.submitBtn.style.display = 'inline-block';
+  el.retryBtn.style.display = 'none';
+  renderCurrentQuestion();
+}
+
+function renderCurrentQuestion() {
+  if (currentIndex >= currentQuestions.length) {
+    showResults();
+    return;
+  }
+
+  answerChecked = false;
+  const q = currentQuestions[currentIndex];
+  let choicesHTML = '';
+  q.choices.forEach((choice, i) => {
+    choicesHTML += `
+      <label class="answer">
+        <input type="radio" name="answer" value="${i}" />
+        <span>${esc(choice)}</span>
+      </label>
+    `;
+  });
+
+  el.container.innerHTML = `
+    <div class="question-header">
+      <span>Question ${currentIndex + 1} of ${currentQuestions.length}</span>
+      <span>Score: ${score}</span>
+    </div>
+    <div class="question-body">${esc(q.q)}</div>
+    <div class="answers" id="answers-container">${choicesHTML}</div>
+    <div class="explanation" id="explanation-container" style="display:none;"></div>
+  `;
+
+  el.submitBtn.textContent = 'Submit Answer';
+  el.submitBtn.disabled = true;
+
+  document.querySelectorAll('input[name="answer"]').forEach(input => {
+    input.addEventListener('change', () => {
+      document.querySelectorAll('.answer').forEach(label => label.classList.remove('selected'));
+      input.parentElement.classList.add('selected');
+      el.submitBtn.disabled = false;
+    });
+  });
+}
+
+function handleSubmit() {
+  if (answerChecked) {
+    // This is the "Next Question" phase
+    currentIndex++;
+    renderCurrentQuestion();
+  } else {
+    // This is the "Submit Answer" phase
+    const selectedInput = document.querySelector('input[name="answer"]:checked');
+    if (!selectedInput) return;
+
+    answerChecked = true;
+    const selectedValue = parseInt(selectedInput.value, 10);
+    const q = currentQuestions[currentIndex];
+    const isCorrect = selectedValue === q.correct;
+    
+    if (isCorrect) {
+      score++;
+    }
+
+    const answerLabels = document.querySelectorAll('.answer');
+    answerLabels[selectedValue].classList.add(isCorrect ? 'correct' : 'wrong');
+    if (!isCorrect) {
+      answerLabels[q.correct].classList.add('correct');
+    }
+
+    document.querySelectorAll('input[name="answer"]').forEach(input => input.disabled = true);
+    
+    const explanationContainer = document.getElementById('explanation-container');
+    explanationContainer.innerHTML = esc(q.explain);
+    explanationContainer.style.display = 'block';
+
+    if (currentIndex < currentQuestions.length - 1) {
+      el.submitBtn.textContent = 'Next Question';
+    } else {
+      el.submitBtn.textContent = 'Show Results';
+    }
+  }
+}
+
+function showResults() {
+  const percentage = Math.round((score / currentQuestions.length) * 100);
+  el.container.innerHTML = `
+    <div id="result-container">
+      <h2>Quiz Complete!</h2>
+      <p style="font-size: 1.2rem;">You scored <strong>${score}</strong> out of <strong>${currentQuestions.length}</strong> (${percentage}%)</p>
+    </div>
+  `;
+  el.submitBtn.style.display = 'none';
+  el.retryBtn.style.display = 'inline-block';
+}
+
+// Event Listeners
+el.submitBtn.addEventListener('click', handleSubmit);
+el.retryBtn.addEventListener('click', startQuiz);
+
+document.addEventListener('keydown', e => {
+  // Prevent hotkeys from firing when typing in an input/textarea
+  const targetTag = e.target.tagName.toLowerCase();
+  if (targetTag === 'input' || targetTag === 'textarea') {
+    return;
+  }
+
+  const key = e.key.toLowerCase();
+  if (key === 'r') {
+    e.preventDefault();
+    startQuiz();
+  }
+  if (key === 'n' && !el.submitBtn.disabled && el.submitBtn.style.display !== 'none') {
+    e.preventDefault();
+    handleSubmit();
+  }
+});
+
+// Initial load
+startQuiz();
+</script>
+</body>
+</html>
